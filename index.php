@@ -6,6 +6,7 @@
   <title>test</title>
 </head>
 <body>
+  asdas
   <?php require("secret.php"); echo $abtest; ?>
 </body>
 </html>
