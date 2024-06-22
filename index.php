@@ -12,13 +12,13 @@ $lom = explode('/', $s);
 switch ($s) {
   case '':
   case '/home':
-    require('./homepage.php');
+    require('./_pages/homepage.php');
     break;
   case '/login':
-    require('./login.php');
+    require('./_pages/user/login.php');
     break;
   case '/logout':
-    require('./logout.php');
+    require('./_pages/user/logout.php');
     break;
 
   default:

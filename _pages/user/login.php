@@ -9,7 +9,8 @@ if (count(get_included_files()) == 1) {
 <?php
 
 // Funkce pro generování náhodného tokenu
-function generateToken($length = 64) {
+function generateToken($length = 64)
+{
   return bin2hex(random_bytes($length));
 }
 
@@ -19,58 +20,84 @@ require($_SERVER['DOCUMENT_ROOT'] . '/db.php');
 // Kontrola, zda je uživatel již přihlášen pomocí session nebo cookies
 if (!isset($_SESSION['uid'])) {
   if (isset($_COOKIE['rememberme'])) {
-      $token = $_COOKIE['rememberme'];
-      $stmt = $conn->prepare("SELECT * FROM `user_tokens` WHERE `token` = ?");
-      $stmt->bind_param("s", $token);
-      $stmt->execute();
-      $result = $stmt->get_result();
+    $token = $_COOKIE['rememberme'];
 
-      if ($result->num_rows > 0) {
-          $row = $result->fetch_array(MYSQLI_ASSOC);
-          $_SESSION['uid'] = $row['user_id'];
+    // SQL dotaz s kontrolou platnosti tokenu (maximálně 30 dní starý)
+    $stmt = $conn->prepare("SELECT * FROM `user_tokens` WHERE `token` = ? AND `created_at` >= NOW() - INTERVAL 30 DAY");
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows > 0) {
+      $row = $result->fetch_array(MYSQLI_ASSOC);
+
+      $USERresult = $conn->query("SELECT * FROM `users` WHERE `id` = '" . $row['user_id'] . "';");
+
+      if ($USERresult->num_rows > 0) {
+        // output data of each row
+        $USERrow = $USERresult->fetch_array(MYSQLI_ASSOC);
+        $_SESSION['uid'] = $USERrow['id'];
+        $_SESSION['jmeno'] = $USERrow['jmeno'];
+        $_SESSION['prijmeni'] = $USERrow['prijmeni'];
+        $_SESSION['theme'] = 'light';
+
+        $_SESSION['toast'][] = ['icon' => 'success', 'title' => 'Automaticky přihlášeno'];
+
+        if (isset($_GET['return']) && $_GET['return'] != '') {
+          header('Location: ' . $_GET['return']);
+        } else {
           header('Location: /');
-          exit;
+        }
+      } else {
+        die("chyba ds6540ads96");
       }
+      exit;
+    }
   }
+
 
   // Zpracování přihlašovacího formuláře
   if (isset($_POST['emailjmeno']) && isset($_POST['password'])) {
-      $stmt = $conn->prepare("SELECT * FROM `users` WHERE `uzivatel` = ? OR `email` = ?");
-      $stmt->bind_param("ss", $_POST['emailjmeno'], $_POST['emailjmeno']);
-      $stmt->execute();
-      $result = $stmt->get_result();
+    $stmt = $conn->prepare("SELECT * FROM `users` WHERE `uzivatel` = ? OR `email` = ?");
+    $stmt->bind_param("ss", $_POST['emailjmeno'], $_POST['emailjmeno']);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-      if ($result->num_rows > 0) {
-          $row = $result->fetch_array(MYSQLI_ASSOC);
-          if (password_verify($_POST['password'], $row['heslo'])) {
-              $_SESSION['uid'] = $row['id'];
-              $_SESSION['jmeno'] = $row['jmeno'];
-              $_SESSION['prijmeni'] = $row['prijmeni'];
-              $_SESSION['toast'][] = ['icon' => 'success', 'title' => 'Úspěšně přihlášeno'];
+    if ($result->num_rows > 0) {
+      $row = $result->fetch_array(MYSQLI_ASSOC);
+      if (password_verify($_POST['password'], $row['heslo'])) {
+        $_SESSION['uid'] = $row['id'];
+        $_SESSION['jmeno'] = $row['jmeno'];
+        $_SESSION['prijmeni'] = $row['prijmeni'];
+        $_SESSION['theme'] = 'light';
 
-              if (isset($_POST['remember'])) {
-                  // Generování a uložení tokenu do databáze
-                  $token = generateToken();
-                  $stmt = $conn->prepare("INSERT INTO `user_tokens` (`user_id`, `token`) VALUES (?, ?)");
-                  $stmt->bind_param("is", $row['id'], $token);
-                  $stmt->execute();
+        $_SESSION['toast'][] = ['icon' => 'success', 'title' => 'Úspěšně přihlášeno'];
 
-                  // Uložení tokenu do cookies
-                  setcookie('rememberme', $token, time() + (86400 * 30), "/"); // 30 dní
-              }
+        if (isset($_POST['remember'])) {
+          // Generování a uložení tokenu do databáze
+          $token = generateToken();
+          $stmt = $conn->prepare("INSERT INTO `user_tokens` (`user_id`, `token`) VALUES (?, ?)");
+          $stmt->bind_param("is", $row['id'], $token);
+          $stmt->execute();
 
-              if (isset($_GET['return']) && $_GET['return'] != '') {
-                  header('Location: ' . $_GET['return']);
-              } else {
-                  header('Location: /');
-              }
-              exit;
-          } else {
-              echo '<h1 style="color:red;">Špatné heslo nebo uživatelské jméno</h1>';
-          }
+          // Uložení tokenu do cookies
+          setcookie('rememberme', $token, time() + (86400 * 30), "/"); // 30 dní
+          $_SESSION['toast'][] = ['icon' => 'info', 'title' => 'Nastaveno automatické přihlašování'];
+
+        }
+
+        if (isset($_GET['return']) && $_GET['return'] != '') {
+          header('Location: ' . $_GET['return']);
+        } else {
+          header('Location: /');
+        }
+        exit;
       } else {
-          echo '<h1 style="color:red;">Špatné heslo nebo uživatelské jméno</h1>';
+        echo '<h1 style="color:red;">Špatné heslo nebo uživatelské jméno</h1>';
       }
+    } else {
+      echo '<h1 style="color:red;">Špatné heslo nebo uživatelské jméno</h1>';
+    }
   }
 } else {
   header("Location: /");
@@ -160,6 +187,8 @@ if (!isset($_SESSION['uid'])) {
   <script src="/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
   <!-- AdminLTE App -->
   <script src="/dist/js/adminlte.min.js"></script>
+  <?php require($_SERVER['DOCUMENT_ROOT'] . '/_parts/toast.php'); ?>
+
 </body>
 
 </html>
